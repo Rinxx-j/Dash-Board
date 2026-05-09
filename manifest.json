@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="theme-color" content="#f59e0b"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Dashboard"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
+<title>Mi Dashboard</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:#0a0a0a;color:#f0f0f0;font-family:'DM Mono','Courier New',monospace;min-height:100vh;overscroll-behavior:none}
+  button{font-family:'DM Mono','Courier New',monospace;-webkit-appearance:none}
+  ::-webkit-scrollbar{width:4px;height:4px}
+  ::-webkit-scrollbar-track{background:#111}
+  ::-webkit-scrollbar-thumb{background:#333;border-radius:2px}
+  #root{min-height:100vh}
+
+  /* Install banner */
+  #install-banner{display:none;position:fixed;bottom:0;left:0;right:0;background:#1a1a1a;border-top:1px solid #2a2a2a;padding:12px 16px;z-index:999;align-items:center;gap:10px}
+  #install-banner.show{display:flex}
+  #install-banner span{flex:1;font-size:11px;color:#aaa;letter-spacing:.5px}
+  #install-banner button{padding:8px 14px;background:#f59e0b;color:#000;border:none;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer}
+  #install-dismiss{background:none!important;color:#555!important;padding:8px!important}
+
+  .fade-in{animation:fadeIn .25s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="install-banner">
+  <span>📲 Instalá el dashboard como app</span>
+  <button id="install-dismiss" onclick="dismissInstall()">✕</button>
+  <button id="install-btn" onclick="doInstall()">INSTALAR</button>
+</div>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const C = {
+  bg:"#0a0a0a",surface:"#111111",surface2:"#1a1a1a",border:"#1e1e1e",border2:"#2a2a2a",
+  text:"#f0f0f0",muted:"#555555",dim:"#333333",accent:"#f59e0b",accentDim:"#92400e",
+  accentGlow:"rgba(245,158,11,0.08)",white:"#ffffff",
+};
+
+const CHECKLIST=[
+  {id:"levantarme",label:"Levantarme temprano",icon:"⏰"},
+  {id:"entrenar",label:"Entrenar",icon:"🏋️"},
+  {id:"lectura",label:"Lectura",icon:"📖"},
+  {id:"devocional",label:"Devocional",icon:"🙏"},
+  {id:"biblia",label:"Leer la Biblia",icon:"✝️"},
+  {id:"comidas",label:"Sin comer entre comidas",icon:"🍽️"},
+  {id:"agua",label:"Tomar agua",icon:"💧"},
+];
+
+const WEEK_PLANS={
+  1:{label:"Día 1",name:"Push + Piernas + Hombros",sections:[
+    {title:"Calentamiento",exercises:["Trote suave en el lugar — 2 min","Movilidad de hombros — 1 min","Movilidad de cadera y rodillas — 2 min"]},
+    {title:"Fuerza",exercises:["Flexiones clásicas — 4×10-12","Fondos en silla — 3×10-12","Sentadillas clásicas — 4×20","Zancadas alternadas — 3×12 por pierna","Pike push-ups — 3×8-12","Elevación de talones — 3×25"]},
+    {title:"Core",exercises:["Crunch abdominal — 3×20","Plancha frontal — 3×45-60 seg"]},
+    {title:"Cardio",exercises:["Trote continuo ritmo medio — 20-25 min"],hasCardio:true},
+  ]},
+  2:{label:"Día 2",name:"Cardio + Core",sections:[
+    {title:"Cardio",exercises:["Trote continuo suave — 35-40 min"],hasCardio:true},
+    {title:"Core",exercises:["Abdominal bicicleta — 3×20 por lado","Elevación de piernas acostado — 3×15","Plancha lateral — 3×40 seg por lado","Plancha frontal — 3×60 seg"]},
+    {title:"Movilidad",exercises:["Estiramientos suaves — 5-10 min"]},
+  ]},
+  3:{label:"Día 3",name:"Full Body Intenso",sections:[
+    {title:"Circuito × 4 vueltas",exercises:["Flexiones clásicas — 10-12","Pull-back superman — 15-20","Sentadillas con salto — 15","Fondos en silla — 10","Mountain climbers — 20 por lado","Superman — 15","Plancha frontal — 40 seg","Descanso entre vueltas — 60-75 seg"]},
+    {title:"Cardio",exercises:["Trote rápido o continuo — 15-20 min"],hasCardio:true},
+  ]},
+  4:{label:"Día 4",name:"Recuperación Activa",sections:[
+    {title:"Cardio suave",exercises:["Caminata rápida o trote suave — 30-40 min"],hasCardio:true},
+    {title:"Movilidad",exercises:["Estiramiento de piernas — 3 min","Estiramiento pecho/hombros — 3 min","Movilidad de caderas — 2 min","Movilidad de hombros — 2 min"]},
+  ]},
+  5:{label:"Día 5",name:"Espalda + Brazos + Posterior",sections:[
+    {title:"Fuerza",exercises:["Pull-back superman — 4×15-20","Superman brazos extendidos — 4×15","Pike push-ups — 3×8-12","Flexiones diamante — 3×10-12","Sentadilla sumo — 4×20","Peso muerto rumano a una pierna — 3×12 por pierna","Puente de glúteo — 3×20","Elevación de talones — 3×25"]},
+    {title:"Core",exercises:["Elevación de piernas — 3×15","Crunch abdominal — 3×25","Chin push-up hold — 3 rondas de 10-20 seg"]},
+    {title:"Cardio",exercises:["Trote continuo — 20 min"],hasCardio:true},
+  ]},
+  6:{label:"Día 6",name:"HIIT + Definición",sections:[
+    {title:"Calentamiento",exercises:["Trote suave — 5 min"],hasCardio:true},
+    {title:"HIIT × 8 rondas",exercises:["1 min rápido + 2 min suave — 8 rondas"]},
+    {title:"Core",exercises:["Abdominal bicicleta — 3×20 por lado","Plancha frontal — 3×60-75 seg","Plancha lateral — 3×40 seg por lado"]},
+  ]},
+  7:{label:"Día 7",name:"Descanso Completo",sections:[
+    {title:"Opcional",exercises:["Caminar","Movilidad","Estirar suave"]},
+  ]},
+};
+
+const RAIN_CARDIO={
+  rounds:"4-6 vueltas",
+  exercises:["Jumping jacks — 40 seg","Mountain climbers — 30 seg","Rodillas altas — 30 seg","Sentadillas rápidas — 20 rep","Descanso — 1 min"],
+};
+
+const POMODORO_MODES=[
+  {label:"Foco",duration:25*60},
+  {label:"Descanso",duration:5*60},
+  {label:"Largo",duration:15*60},
+];
+
+const QUOTES=[
+  "Disciplina es elegir entre lo que querés ahora y lo que más querés.",
+  "5AM club. Pocos lo hacen.",
+  "Cada rep cuenta. Hoy te superás a vos mismo.",
+  "La constancia vence al talento.",
+  "Un día más. Un paso más.",
+];
+
+const todayKey=()=>new Date().toISOString().split("T")[0];
+const todayDow=()=>new Date().getDay();
+
+function getWeekKeys(offsetWeeks=0){
+  const base=new Date();
+  base.setDate(base.getDate()-offsetWeeks*7);
+  const dow=base.getDay();
+  return Array.from({length:7},(_,i)=>{const d=new Date(base);d.setDate(base.getDate()-dow+i);return d.toISOString().split("T")[0];});
+}
+
+function safeGet(key,fallback={}){try{const v=localStorage.getItem(key);return v?JSON.parse(v):fallback;}catch{return fallback;}}
+function safeSet(key,val){try{localStorage.setItem(key,JSON.stringify(val));}catch{}}
+
+function Checkbox({checked,onToggle,size=16}){
+  return(
+    <div onClick={e=>{e.stopPropagation();onToggle();}} style={{
+      width:size,height:size,borderRadius:3,flexShrink:0,cursor:"pointer",
+      border:`1px solid ${checked?C.accent:C.dim}`,
+      background:checked?C.accent:"transparent",
+      display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",
+    }}>
+      {checked&&<span style={{fontSize:size*0.65,color:C.bg,fontWeight:900,lineHeight:1}}>✓</span>}
+    </div>
+  );
+}
+
+function App(){
+  const tk=todayKey();
+  const [tab,setTab]=useState("rutina");
+  const [checks,setChecks]=useState(()=>safeGet(`checks_${tk}`));
+  const [exChecks,setExChecks]=useState(()=>safeGet(`ex_${tk}`));
+  const [streak,setStreak]=useState(()=>parseInt(localStorage.getItem("streak")||"0"));
+  const [selectedDay,setSelectedDay]=useState(()=>{const d=todayDow();return d===0?7:d;});
+  const [rain,setRain]=useState(false);
+  const [pomMode,setPomMode]=useState(0);
+  const [pomTime,setPomTime]=useState(POMODORO_MODES[0].duration);
+  const [pomRunning,setPomRunning]=useState(false);
+  const [pomCount,setPomCount]=useState(0);
+  const [histOffset,setHistOffset]=useState(0);
+  const pomRef=useRef(null);
+  const [quote]=useState(()=>QUOTES[Math.floor(Math.random()*QUOTES.length)]);
+
+  useEffect(()=>{
+    safeSet(`checks_${tk}`,checks);
+    const done=CHECKLIST.every(c=>checks[c.id]);
+    if(done){
+      const last=localStorage.getItem("lastStreakDay");
+      if(last!==tk){const s=streak+1;setStreak(s);localStorage.setItem("streak",String(s));localStorage.setItem("lastStreakDay",tk);}
+    }
+  },[checks]);
+
+  useEffect(()=>{safeSet(`ex_${tk}`,exChecks);},[exChecks]);
+
+  useEffect(()=>{
+    if(pomRunning){
+      pomRef.current=setInterval(()=>{
+        setPomTime(t=>{
+          if(t<=1){clearInterval(pomRef.current);setPomRunning(false);if(pomMode===0)setPomCount(c=>c+1);return 0;}
+          return t-1;
+        });
+      },1000);
+    }else clearInterval(pomRef.current);
+    return()=>clearInterval(pomRef.current);
+  },[pomRunning,pomMode]);
+
+  const switchPom=(i)=>{setPomMode(i);setPomTime(POMODORO_MODES[i].duration);setPomRunning(false);};
+  const fmtTime=(s)=>`${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+
+  const checkedCount=CHECKLIST.filter(c=>checks[c.id]).length;
+  const pomPct=pomTime/POMODORO_MODES[pomMode].duration;
+  const rr=52,circ=2*Math.PI*rr;
+  const plan=WEEK_PLANS[selectedDay];
+  const hasCardioToday=plan.sections.some(s=>s.hasCardio);
+  const toggleEx=(key)=>setExChecks(p=>({...p,[key]:!p[key]}));
+
+  const displayKeys=getWeekKeys(histOffset);
+  const dayLabels=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+
+  const totalDaysCompleted=Object.keys(localStorage)
+    .filter(k=>k.startsWith("checks_"))
+    .filter(k=>{try{const v=JSON.parse(localStorage.getItem(k));return CHECKLIST.every(c=>v[c.id]);}catch{return false;}})
+    .length;
+
+  return(
+    <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'DM Mono','Courier New',monospace",paddingBottom:80}}>
+
+      {/* HEADER */}
+      <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100}}>
+        <div>
+          <div style={{fontSize:9,color:C.muted,letterSpacing:3,textTransform:"uppercase",marginBottom:2}}>
+            {new Date().toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"})}
+          </div>
+          <div style={{fontSize:18,fontWeight:700,color:C.white,letterSpacing:-0.5}}>MI DASHBOARD</div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:9,color:C.muted,letterSpacing:2}}>RACHA</div>
+          <div style={{fontSize:26,fontWeight:900,color:C.accent}}>{streak}<span style={{fontSize:11,color:C.muted}}> días</span></div>
+        </div>
+      </div>
+
+      {/* QUOTE */}
+      <div style={{padding:"8px 20px",borderBottom:`1px solid ${C.border}`,fontSize:11,color:C.muted,fontStyle:"italic"}}>
+        — {quote}
+      </div>
+
+      {/* NAV */}
+      <div style={{display:"flex",background:C.surface,borderBottom:`1px solid ${C.border}`,position:"sticky",top:57,zIndex:99}}>
+        {[{key:"rutina",label:"RUTINA"},{key:"entreno",label:"ENTRENO"},{key:"pomodoro",label:"POMODORO"},{key:"semana",label:"SEMANA"}].map(n=>(
+          <button key={n.key} onClick={()=>setTab(n.key)} style={{
+            flex:1,padding:"11px 4px",background:"none",border:"none",cursor:"pointer",
+            fontSize:9,fontWeight:700,letterSpacing:2,fontFamily:"inherit",
+            color:tab===n.key?C.accent:C.muted,
+            borderBottom:tab===n.key?`2px solid ${C.accent}`:"2px solid transparent",
+          }}>{n.label}</button>
+        ))}
+      </div>
+
+      <div style={{padding:"20px 16px",maxWidth:480,margin:"0 auto"}} className="fade-in">
+
+        {/* ── RUTINA ── */}
+        {tab==="rutina"&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:14}}>
+              <span style={{fontSize:9,color:C.muted,letterSpacing:3}}>HÁBITOS DEL DÍA</span>
+              <span style={{fontSize:11,color:checkedCount===CHECKLIST.length?C.accent:C.muted}}>{checkedCount}/{CHECKLIST.length}</span>
+            </div>
+            <div style={{background:C.dim,borderRadius:2,height:2,marginBottom:20}}>
+              <div style={{background:C.accent,borderRadius:2,height:2,width:`${(checkedCount/CHECKLIST.length)*100}%`,transition:"width .4s"}}/>
+            </div>
+            {CHECKLIST.map(item=>(
+              <div key={item.id} onClick={()=>setChecks(c=>({...c,[item.id]:!c[item.id]}))} style={{
+                display:"flex",alignItems:"center",gap:14,padding:"13px 14px",marginBottom:6,
+                background:checks[item.id]?C.accentGlow:C.surface,
+                border:`1px solid ${checks[item.id]?C.accentDim:C.border}`,
+                borderRadius:4,cursor:"pointer",transition:"all .15s",
+              }}>
+                <Checkbox checked={!!checks[item.id]} onToggle={()=>setChecks(c=>({...c,[item.id]:!c[item.id]}))}/>
+                <span style={{fontSize:13,color:checks[item.id]?C.muted:C.text,textDecoration:checks[item.id]?"line-through":"none"}}>
+                  {item.icon} {item.label}
+                </span>
+              </div>
+            ))}
+            {checkedCount===CHECKLIST.length&&(
+              <div style={{marginTop:18,padding:16,border:`1px solid ${C.accentDim}`,borderRadius:4,textAlign:"center",background:C.accentGlow}}>
+                <div style={{fontSize:11,letterSpacing:3,color:C.accent}}>DÍA COMPLETADO ✓</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── ENTRENO ── */}
+        {tab==="entreno"&&(
+          <div>
+            <div style={{display:"flex",gap:5,marginBottom:18,overflowX:"auto",paddingBottom:4}}>
+              {Object.entries(WEEK_PLANS).map(([d,p])=>{
+                const isToday=parseInt(d)===(todayDow()===0?7:todayDow());
+                const sel=selectedDay===parseInt(d);
+                return(
+                  <button key={d} onClick={()=>setSelectedDay(parseInt(d))} style={{
+                    flexShrink:0,padding:"6px 10px",fontFamily:"inherit",
+                    background:sel?C.accentGlow:"none",
+                    border:`1px solid ${sel?C.accent:C.border}`,
+                    borderRadius:3,fontSize:9,fontWeight:700,letterSpacing:1,
+                    color:sel?C.accent:C.muted,cursor:"pointer",
+                  }}>{p.label}{isToday?" ●":""}</button>
+                );
+              })}
+            </div>
+            <div style={{marginBottom:16,paddingBottom:12,borderBottom:`1px solid ${C.border}`}}>
+              <div style={{fontSize:9,color:C.muted,letterSpacing:2,marginBottom:3}}>{plan.label.toUpperCase()}</div>
+              <div style={{fontSize:15,fontWeight:700,color:C.white}}>{plan.name}</div>
+            </div>
+            {hasCardioToday&&selectedDay!==7&&(
+              <div onClick={()=>setRain(r=>!r)} style={{
+                display:"flex",alignItems:"center",gap:10,padding:"10px 14px",marginBottom:14,
+                background:rain?C.accentGlow:C.surface,
+                border:`1px solid ${rain?C.accentDim:C.border}`,
+                borderRadius:4,cursor:"pointer",
+              }}>
+                <Checkbox checked={rain} onToggle={()=>setRain(r=>!r)}/>
+                <span style={{fontSize:12}}>🌧️ Está lloviendo — usar cardio indoor</span>
+              </div>
+            )}
+            {rain&&hasCardioToday&&selectedDay!==7&&(
+              <div style={{marginBottom:16,padding:14,border:`1px solid ${C.accentDim}`,borderRadius:4,background:C.accentGlow}}>
+                <div style={{fontSize:9,letterSpacing:2,color:C.accent,marginBottom:8}}>CARDIO INDOOR · {RAIN_CARDIO.rounds}</div>
+                {RAIN_CARDIO.exercises.map((ex,i)=>{
+                  const key=`rain_${selectedDay}_${i}`;
+                  return(
+                    <div key={i} onClick={()=>toggleEx(key)} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<RAIN_CARDIO.exercises.length-1?`1px solid ${C.border}`:"none",cursor:"pointer"}}>
+                      <Checkbox checked={!!exChecks[key]} onToggle={()=>toggleEx(key)} size={14}/>
+                      <span style={{fontSize:12,color:exChecks[key]?C.muted:C.text,textDecoration:exChecks[key]?"line-through":"none"}}>{ex}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {plan.sections.map((sec,si)=>(
+              <div key={si} style={{marginBottom:16}}>
+                <div style={{fontSize:9,letterSpacing:2,color:sec.hasCardio&&rain&&selectedDay!==7?C.dim:C.muted,marginBottom:8,paddingBottom:6,borderBottom:`1px solid ${C.border}`}}>
+                  {sec.title.toUpperCase()}{sec.hasCardio&&rain&&selectedDay!==7&&<span style={{marginLeft:8,color:C.dim}}>— reemplazado</span>}
+                </div>
+                {sec.exercises.map((ex,ei)=>{
+                  const key=`d${selectedDay}_s${si}_e${ei}`;
+                  const skip=sec.hasCardio&&rain&&selectedDay!==7;
+                  return(
+                    <div key={ei} onClick={()=>!skip&&toggleEx(key)} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:ei<sec.exercises.length-1?`1px solid ${C.border}`:"none",cursor:skip?"default":"pointer",opacity:skip?0.3:1}}>
+                      {!skip?<Checkbox checked={!!exChecks[key]} onToggle={()=>toggleEx(key)} size={14}/>:<div style={{width:14,height:14,flexShrink:0}}/>}
+                      <span style={{fontSize:12,color:exChecks[key]&&!skip?C.muted:C.text,textDecoration:exChecks[key]&&!skip?"line-through":"none"}}>{ex}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+            <div style={{fontSize:10,color:C.dim,marginTop:4}}>⏱ Descanso entre series: 45-75 seg</div>
+          </div>
+        )}
+
+        {/* ── POMODORO ── */}
+        {tab==="pomodoro"&&(
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:9,color:C.muted,letterSpacing:3,marginBottom:20}}>TÉCNICA POMODORO</div>
+            <div style={{display:"flex",gap:6,justifyContent:"center",marginBottom:28}}>
+              {POMODORO_MODES.map((m,i)=>(
+                <button key={i} onClick={()=>switchPom(i)} style={{
+                  padding:"6px 14px",border:`1px solid ${pomMode===i?C.accent:C.border}`,
+                  borderRadius:2,cursor:"pointer",fontSize:9,fontWeight:700,letterSpacing:2,
+                  background:pomMode===i?C.accentGlow:"none",
+                  color:pomMode===i?C.accent:C.muted,fontFamily:"inherit",
+                }}>{m.label.toUpperCase()}</button>
+              ))}
+            </div>
+            <div style={{position:"relative",display:"inline-block",marginBottom:28}}>
+              <svg width={130} height={130} style={{transform:"rotate(-90deg)"}}>
+                <circle cx={65} cy={65} r={rr} fill="none" stroke={C.surface2} strokeWidth={6}/>
+                <circle cx={65} cy={65} r={rr} fill="none" stroke={C.accent} strokeWidth={6}
+                  strokeDasharray={circ} strokeDashoffset={circ*(1-pomPct)} strokeLinecap="butt"
+                  style={{transition:"stroke-dashoffset .8s",filter:"drop-shadow(0 0 6px rgba(245,158,11,0.45))"}}/>
+              </svg>
+              <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)"}}>
+                <div style={{fontSize:28,fontWeight:900,color:C.white,fontVariantNumeric:"tabular-nums"}}>{fmtTime(pomTime)}</div>
+                <div style={{fontSize:9,color:C.muted,letterSpacing:2,marginTop:2}}>{POMODORO_MODES[pomMode].label.toUpperCase()}</div>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:22}}>
+              <button onClick={()=>setPomRunning(r=>!r)} style={{
+                padding:"11px 28px",background:pomRunning?C.surface:C.accent,
+                border:`1px solid ${pomRunning?C.border:C.accent}`,
+                borderRadius:3,cursor:"pointer",fontSize:11,fontWeight:700,letterSpacing:2,
+                color:pomRunning?C.muted:C.bg,fontFamily:"inherit",transition:"all .15s",
+              }}>{pomRunning?"PAUSAR":"INICIAR"}</button>
+              <button onClick={()=>{setPomRunning(false);setPomTime(POMODORO_MODES[pomMode].duration);}} style={{
+                padding:"11px 16px",background:"none",border:`1px solid ${C.border}`,
+                borderRadius:3,cursor:"pointer",fontSize:11,fontWeight:700,letterSpacing:2,
+                color:C.muted,fontFamily:"inherit",
+              }}>↺</button>
+            </div>
+            {pomCount>0&&(
+              <div style={{fontSize:11,color:C.accent,letterSpacing:2}}>
+                🍅 {pomCount} pomodoro{pomCount>1?"s":""} completado{pomCount>1?"s":""}
+              </div>
+            )}
+            <div style={{marginTop:28,padding:16,border:`1px solid ${C.border}`,borderRadius:4,textAlign:"left"}}>
+              <div style={{fontSize:9,color:C.muted,letterSpacing:2,marginBottom:10}}>CÓMO USAR</div>
+              {["25 min de foco total","5 min de descanso corto","Cada 4 pomodoros → descanso largo (15 min)"].map((t,i)=>(
+                <div key={i} style={{fontSize:11,color:C.muted,marginBottom:6,display:"flex",gap:8}}>
+                  <span style={{color:C.accent}}>{i+1}.</span>{t}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── SEMANA ── */}
+        {tab==="semana"&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <button onClick={()=>setHistOffset(h=>h+1)} style={{background:"none",border:`1px solid ${C.border}`,color:C.muted,padding:"4px 10px",borderRadius:2,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>←</button>
+              <span style={{fontSize:9,color:C.muted,letterSpacing:2}}>
+                {histOffset===0?"ESTA SEMANA":`HACE ${histOffset} SEMANA${histOffset>1?"S":""}`}
+              </span>
+              <button onClick={()=>setHistOffset(h=>Math.max(0,h-1))} disabled={histOffset===0} style={{background:"none",border:`1px solid ${histOffset===0?C.dim:C.border}`,color:histOffset===0?C.dim:C.muted,padding:"4px 10px",borderRadius:2,cursor:histOffset===0?"default":"pointer",fontSize:11,fontFamily:"inherit"}}>→</button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:20}}>
+              {displayKeys.map((key,i)=>{
+                const dayData=safeGet(`checks_${key}`);
+                const done=CHECKLIST.every(c=>dayData[c.id]);
+                const partial=CHECKLIST.some(c=>dayData[c.id]);
+                const isToday=key===tk;
+                return(
+                  <div key={key} style={{
+                    padding:"8px 4px",borderRadius:3,textAlign:"center",
+                    background:done?C.accentGlow:partial?"rgba(245,158,11,0.03)":C.surface,
+                    border:`1px solid ${done?C.accentDim:isToday?C.muted:C.border}`,
+                  }}>
+                    <div style={{fontSize:8,color:C.muted,marginBottom:4}}>{dayLabels[i]}</div>
+                    <div style={{fontSize:14}}>{done?"✓":partial?"·":"—"}</div>
+                    {isToday&&<div style={{fontSize:7,color:C.accent,marginTop:2}}>HOY</div>}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{padding:14,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:14,display:"flex",justifyContent:"space-between"}}>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:22,fontWeight:900,color:C.accent}}>{streak}</div>
+                <div style={{fontSize:9,color:C.muted,letterSpacing:1}}>RACHA ACTUAL</div>
+              </div>
+              <div style={{width:1,background:C.border}}/>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:22,fontWeight:900,color:C.white}}>{totalDaysCompleted}</div>
+                <div style={{fontSize:9,color:C.muted,letterSpacing:1}}>DÍAS TOTALES</div>
+              </div>
+              <div style={{width:1,background:C.border}}/>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:22,fontWeight:900,color:C.white}}>
+                  {displayKeys.filter(k=>{const d=safeGet(`checks_${k}`);return CHECKLIST.every(c=>d[c.id]);}).length}/7
+                </div>
+                <div style={{fontSize:9,color:C.muted,letterSpacing:1}}>ESTA SEMANA</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+
+<script>
+// ─── PWA / Service Worker ───────────────────────────────────────────────────
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("sw.js").then(r=>{
+      console.log("SW registrado:",r.scope);
+    }).catch(e=>console.log("SW error:",e));
+  });
+}
+
+// ─── Install prompt ─────────────────────────────────────────────────────────
+let deferredPrompt=null;
+const banner=document.getElementById("install-banner");
+
+window.addEventListener("beforeinstallprompt",e=>{
+  e.preventDefault();
+  deferredPrompt=e;
+  if(!localStorage.getItem("pwa-dismissed")){
+    banner.classList.add("show");
+  }
+});
+
+function doInstall(){
+  banner.classList.remove("show");
+  if(deferredPrompt){
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(r=>{
+      if(r.outcome==="accepted") console.log("PWA instalada");
+      deferredPrompt=null;
+    });
+  }
+}
+
+function dismissInstall(){
+  banner.classList.remove("show");
+  localStorage.setItem("pwa-dismissed","1");
+}
+
+window.addEventListener("appinstalled",()=>{
+  banner.classList.remove("show");
+  deferredPrompt=null;
+});
+</script>
+</body>
+</html>
